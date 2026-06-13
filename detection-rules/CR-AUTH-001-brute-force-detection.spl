@@ -1,0 +1,13 @@
+# CR-AUTH-001: Brute Force Authentication Detection
+# Purpose: Detect multiple failed login attempts followed by a successful login
+# Data Source: Windows Security Event Log
+# Relevant Event IDs: 4625 Failed Logon, 4624 Successful Logon
+
+index=windows sourcetype="WinEventLog:Security" (EventCode=4625 OR EventCode=4624)
+| eval FailSuccess=case(EventCode=4625, "Fail", EventCode=4624, "Success")
+| stats count by Account_Name, Source_Network_Address, FailSuccess
+| where count>10 AND FailSuccess="Fail"
+| transaction Account_Name, Source_Network_Address maxspan=5m
+| search FailSuccess="Success"
+| eval AlertMessage="Potential brute-force attack detected: " . Account_Name . " from " . Source_Network_Address
+| table _time, Account_Name, Source_Network_Address, count, AlertMessage
